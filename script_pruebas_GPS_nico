@@ -1,0 +1,113 @@
+#include <WiFi.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <TinyGPS++.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+TinyGPSPlus gps;
+
+#define RXPin 34
+#define TXPin 12
+HardwareSerial GPSSerial(1);
+
+struct RedWifi {
+  const char* ssid;
+  const char* password;
+};
+
+RedWifi redes[] = {
+  {"so easy", "12345678"},
+  {"VodafoneBA5913", "40575826P"}
+};
+
+void setup() {
+  Serial.begin(115200);
+  GPSSerial.begin(9600, SERIAL_8N1, RXPin, TXPin);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("Error al iniciar OLED");
+    while (true);
+  }
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 10);
+  display.println("Iniciando WiFi...");
+  display.display();
+
+  int numRedes = sizeof(redes) / sizeof(redes[0]);
+  Serial.print("Número de redes: ");
+  Serial.println(numRedes);
+
+  for (int i = 0; i < numRedes; i++) {
+    Serial.print("Intentando conectar a: ");
+    Serial.println(redes[i].ssid);
+
+    WiFi.begin(redes[i].ssid, redes[i].password);
+    int intentos = 0;
+    while (WiFi.status() != WL_CONNECTED && intentos < 10) {
+      delay(500);
+      intentos++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("Conectado a WiFi");
+      Serial.print("IP: ");
+      Serial.println(WiFi.localIP());
+
+      display.clearDisplay();
+      display.setCursor(0, 0);
+      display.println("WiFi Conectado!");
+      display.print("IP:");
+      display.println(WiFi.localIP());
+      display.display();
+      break;
+    }
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    display.clearDisplay();
+    display.setCursor(0, 10);
+    display.println("No conectado a WiFi");
+    display.display();
+    Serial.println("No se pudo conectar a ninguna red.");
+  }
+}
+
+void loop() {
+  // Procesar datos del GPS
+  while (GPSSerial.available() > 0) {
+    gps.encode(GPSSerial.read());
+  }
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+
+  if (gps.location.isValid()) {
+    // Si hay localización válida
+    Serial.print("Latitud: ");
+    Serial.println(gps.location.lat(), 6);
+    Serial.print("Longitud: ");
+    Serial.println(gps.location.lng(), 6);
+
+    display.println("GPS OK!");
+    display.print("Lat: ");
+    display.println(gps.location.lat(), 6);
+    display.print("Lon: ");
+    display.println(gps.location.lng(), 6);
+  } else {
+    // Si aún no hay fix
+    Serial.println("Buscando satélites...");
+    display.println("Buscando GPS...");
+  }
+
+  display.display();
+  delay(1000); // Actualiza cada 1 segundo
+}
+
